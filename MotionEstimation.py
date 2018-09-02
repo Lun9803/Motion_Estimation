@@ -5,7 +5,6 @@ import sys
 
 #Code by Bolun Li   25/08/2018
 
-
 # setting up the input file
 file_name = 'monkey'
 file_format = '.avi'
@@ -16,7 +15,7 @@ height = int(demo_video.get(cv.CAP_PROP_FRAME_HEIGHT))
 size = (width, height)
 # motion estimation settings
 frame_rate = demo_video.get(cv.CAP_PROP_FPS)
-detect_period = 0.04
+detect_period = 0.05
 out_fps = int(1/detect_period)
 frame_skipped = int(frame_rate * detect_period)
 dot_colour = (255, 255, 255)
@@ -27,7 +26,6 @@ r_h = int(height/150)
 detect_range = math.sqrt(math.pow(r_w/2, 2) + math.pow(r_h/2, 2))
 valid_range = detect_range/4
 colour_threshold = 2000
-dot_thickness = 1
 # setting up output file
 out = cv.VideoWriter(file_name+'_out.avi', cv.VideoWriter_fourcc(*'XVID'), out_fps, size)
 
@@ -124,7 +122,7 @@ while True:
                     # print("h: " + str(h) + " w: " + str(w))
                     # print(destination)
                     # print("dis: " + str(distance) + " diff:  " + str(difference))
-                    cv.line(out_image, (w, h), (w, h), dot_colour, thickness=dot_thickness)
+                    cv.line(out_image, (w, h), (w, h), dot_colour, thickness=int(distance/valid_range))
                 else:
                     out_image[h][w] = frame[h][w]
             else:
