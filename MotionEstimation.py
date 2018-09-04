@@ -3,8 +3,6 @@ import numpy as np
 import math
 import sys
 
-#Code by Bolun Li   25/08/2018
-
 # setting up the input file
 file_name = 'monkey'
 file_format = '.avi'
@@ -15,17 +13,19 @@ height = int(demo_video.get(cv.CAP_PROP_FRAME_HEIGHT))
 size = (width, height)
 # motion estimation settings
 frame_rate = demo_video.get(cv.CAP_PROP_FPS)
-detect_period = 0.05
+detect_period = 0.1
 out_fps = int(1/detect_period)
 frame_skipped = int(frame_rate * detect_period)
 dot_colour = (255, 255, 255)
+boundary_colour = (0, 0, 255)
 # width and length of each grid
 r_w = int(width/150)
 r_h = int(height/150)
 
 detect_range = math.sqrt(math.pow(r_w/2, 2) + math.pow(r_h/2, 2))
 valid_range = detect_range/4
-colour_threshold = 2000
+colour_threshold = 6000
+
 # setting up output file
 out = cv.VideoWriter(file_name+'_out.avi', cv.VideoWriter_fourcc(*'XVID'), out_fps, size)
 
@@ -94,6 +94,40 @@ def find_vector(img1, img2, h, w, r):
     return destination, difference
 
 
+# get boundaries of the given image
+def get_boundary(img):
+    gray_img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+    # if boundary is not correctly found, change the threshold.
+    ret, thresh = cv.threshold(gray_img, 50, 255, 0)
+    im2, contours, hierarchy = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    return im2
+
+
+# check if the moving point is close to boundary of an object
+# (h, w) is the point to be checked.
+# bound_img is the image that is processed by get_boundary method
+# bound_type indicates which boundary it is checking(left, right, bot, top)
+# distance_limit indicates the distance of the check process
+def check_near_boundary(bound_img, h, w, bound_type, distance_limit):
+    if bound_type == "left":
+        for i in range(distance_limit):
+            if bound_img[h][w+i] == 255:
+                return True
+    if bound_type == "right":
+        for i in range(distance_limit):
+            if bound_img[h][w-i] == 255:
+                return True
+    if bound_type == "top":
+        for i in range(distance_limit):
+            if bound_img[h-i][w] == 255:
+                return True
+    if bound_type == "bot":
+        for i in range(distance_limit):
+            if bound_img[h+i][w] == 255:
+                return True
+    return False
+
+
 # start processing
 
 count = 0
@@ -107,7 +141,14 @@ while True:
             break
     if not next_ret:
         break
+    boundary_image = get_boundary(frame)
     out_image = np.zeros((height, width, 3), np.uint8)
+
+    # for drawing boundary
+    top_bound = height
+    bot_bound = 0
+    left_bound = width
+    right_bound = 0
 
     # go through every pixel of the frame and the frame after
     # when there is a detection need to be done, it finds the most similar block in next frame
@@ -122,11 +163,26 @@ while True:
                     # print("h: " + str(h) + " w: " + str(w))
                     # print(destination)
                     # print("dis: " + str(distance) + " diff:  " + str(difference))
-                    cv.line(out_image, (w, h), (w, h), dot_colour, thickness=int(distance/valid_range))
+
+                    # checks and update boundary
+                    if h < top_bound and check_near_boundary(boundary_image, h, w, "top", int(detect_range)+1):
+                        top_bound = h
+                    if h > bot_bound and check_near_boundary(boundary_image, h, w, "bot", int(detect_range)+1):
+                        bot_bound = h
+                    if w < left_bound and check_near_boundary(boundary_image, h, w, "left", int(detect_range)+1):
+                        left_bound = w
+                    if w > right_bound and check_near_boundary(boundary_image, h, w, "right", int(detect_range)+1):
+                        right_bound = w
+                    cv.line(out_image, (w, h), (w, h), dot_colour, thickness=clamp(int(distance/(valid_range*2)), 1, 5))
                 else:
                     out_image[h][w] = frame[h][w]
             else:
                 out_image[h][w] = frame[h][w]
+    # draw boundary of moving object
+    cv.line(out_image, (left_bound, top_bound), (right_bound, top_bound), (0, 0, 255))
+    cv.line(out_image, (left_bound, top_bound), (left_bound, bot_bound), (0, 0, 255))
+    cv.line(out_image, (right_bound, top_bound), (right_bound, bot_bound), (0, 0, 255))
+    cv.line(out_image, (left_bound, bot_bound), (right_bound, bot_bound), (0, 0, 255))
     out.write(out_image)
     count += 1
     print("frame " + str(count) + " done")
